@@ -198,6 +198,46 @@ namespace TCP
 	};
 
 
+	// tcp header flags
+	enum struct TCPflags : uint8_t
+	{
+		CWR = 1 << 7, // congestion window reduced
+		ECE = 1 << 6, // ecn-echo
+		URG = 1 << 5, // urgent pointer field is significant
+		ACK = 1 << 4, // acknowledgement field is significant
+		PSH = 1 << 3, // push function
+		RST = 1 << 2, // reset the connection
+		SYN = 1 << 1, // synchronise sequence numbers
+		FIN = 1 << 0  // last packet no more data
+	};
+
+
+	// check flags
+	inline constexpr bool operator&(uint8_t lhs , TCPflags rhs)
+	{
+		return lhs & static_cast<uint8_t>(rhs);
+	}
+
+
+	void parseTCPflags(const uint8_t& flags)
+	{
+		std::cout << "Flags: ";
+
+		if (flags & TCPflags::CWR) std::cout << "CWR ";
+		if (flags & TCPflags::ECE) std::cout << "ECE ";
+		if (flags & TCPflags::URG) std::cout << "URG ";
+		if (flags & TCPflags::ACK) std::cout << "ACK ";
+		if (flags & TCPflags::PSH) std::cout << "PSH ";
+		if (flags & TCPflags::RST) std::cout << "RST ";
+		if (flags & TCPflags::SYN) std::cout << "SYN ";
+		if (flags & TCPflags::FIN) std::cout << "FIN";
+		std::cout << std::endl;
+
+
+		return;
+	}
+
+
 	// parse tcp packet into header
 	TCPheader parseTCPheader(const uint8_t* packet)
 	{
@@ -229,7 +269,7 @@ namespace TCP
 		std::cout << "Sequence Number: " << tcpHeader.seqNum << std::endl;
 		std::cout << "Acknowledgement Number: " << tcpHeader.ackNum << std::endl;
 		std::cout << "Data Offset: " << +tcpHeader.dataOffset << std::endl;
-		std::cout << "Flags: " << +tcpHeader.flags << std::endl;
+		parseTCPflags(tcpHeader.flags);
 		std::cout << "Window: " << tcpHeader.window << std::endl;
 		std::cout << "Checksum: " << tcpHeader.checksum << std::endl;
 		std::cout << "Urgent Pointer: " << tcpHeader.urgPtr << std::endl << std::endl;
@@ -243,9 +283,9 @@ namespace TCP
 int main()
 {
 	// test packets
-	uint8_t ethPacket[] = {0xc8 , 0x96 , 0x5a , 0xdd , 0xbe , 0x60 , 0xbc , 0xfc , 0xe7 , 0x09 , 0xa4 , 0x99 , 0x86 , 0xdd};
-	uint8_t ipPacket[] = {0x45 , 0x00 , 0x00 , 0x34 , 0x46 , 0xbc , 0x40 , 0x00 , 0x80 , 0x06 , 0x00 , 0x00 , 0xc0 , 0xa8 , 0x00 , 0x9f , 0x0d , 0x45 , 0xef , 0x44};
-	uint8_t tcpPacket[] = {0x2e , 0xe0 , 0x01 , 0xbb , 0x9a , 0x3f , 0xd7 , 0xf2 , 0x46 , 0xc1 , 0x8d , 0x8b , 0x50 , 0x10 , 0x10 , 0x15 , 0xba , 0x98 , 0x00 , 0x00};
+	uint8_t ethPacket[] = {0xbc , 0xfc , 0xe7 , 0x09 , 0xa4 , 0x99 , 0xc8 , 0x96 , 0x5a , 0xdd , 0xbe , 0x60 , 0x86 , 0xdd};
+	uint8_t ipPacket[] = {0x60 , 0x05 , 0x39 , 0x9c , 0x00 , 0x20 , 0x06 , 0x75 , 0x26 , 0x03 , 0x10 , 0x63 , 0x00 , 0x1c , 0x01 , 0x48 , 0x00 , 0x00 , 0x00 , 0x00 , 0x03 , 0x65 , 0x7e , 0xa3 , 0x2a , 0x06 , 0x59 , 0x02 , 0x49 , 0xc1 , 0x3f , 0x00 , 0x18 , 0x05 , 0xf2 , 0x84 , 0x3d , 0x83 , 0x3c , 0xf6 , };
+	uint8_t tcpPacket[] = {0x01 , 0xbb , 0x34 , 0x89 , 0x21 , 0x8d , 0xb2 , 0xa3 , 0x65 , 0xa2 , 0x38 , 0x39 , 0x80 , 0x12 , 0xff , 0xff , 0x7c , 0x24 , 0x00 , 0x00 , 0x02 , 0x04 , 0x05 , 0xa0 , 0x01 , 0x03 , 0x03 , 0x08 , 0x01 , 0x01 , 0x04 , 0x02};
 
 	Ethernet::printEthHeader(Ethernet::parseEthHeader(ethPacket));
 	IP::printIPheader(IP::parseIPheader(ipPacket));
