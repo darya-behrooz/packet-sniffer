@@ -47,10 +47,29 @@ std::string printMACaddr(const uint8_t mac[6])
 	return oss.str();
 }
 
-// prints ip address
-std::string printIPaddr(const uint32_t addr)
+// prints ipv4 address
+std::string printIPv4addr(const uint32_t addr)
 {
 	return std::to_string((addr >> 24) & 0b1111'1111) + "." + std::to_string((addr >> 16) & 0b1111'1111) + "." + std::to_string((addr >> 8) & 0b1111'1111) + "." + std::to_string(addr & 0b1111'1111);
+}
+
+// prints ipv6 address
+std::string printIPv6addr(const uint8_t addr[16])
+{
+	std::ostringstream oss;
+
+	for (int byte = 0; byte < 16; byte += 2)
+	{
+		oss << std::hex << std::setw(4) << std::setfill('0') << ((static_cast<uint16_t>(addr[byte]) << 8) | static_cast<uint16_t>(addr[byte + 1]));
+
+		if (byte != 14)
+		{
+			oss << ":";
+		}
+	}
+
+
+	return oss.str();
 }
 
 
@@ -59,9 +78,9 @@ namespace Ethernet
 	// ethernet header format
 	struct EthernetHeader
 	{
-		uint8_t destMAC[6]; // 6 bytes
-		uint8_t srcMAC[6]; // 6 bytes
-		uint16_t etherType; // 2 bytes
+		uint8_t destMAC[6]; // 48 bits
+		uint8_t srcMAC[6]; // 48 bits
+		uint16_t etherType; // 16 bits
 	};
 
 
@@ -105,75 +124,251 @@ namespace Ethernet
 
 namespace IP
 {
-	// ip header format
-	struct IPheader
+	namespace IPv4
 	{
-		uint8_t version; // 4 bits
-		uint8_t headerLength; // 4 bits
-		uint8_t dscp; // 6 bits
-		uint8_t ecn; // 2 bits
-		uint16_t totalLength; // 16 bits
-		uint16_t identification; // 16 bits
-		uint8_t flags; // 3 bits
-		uint16_t fragmentOffset; // 13 bits
-		uint8_t timeToLive; // 8 bits
-		uint8_t protocol; // 8 bits
-		uint16_t headerChecksum; // 16 bits
-		uint32_t srcAddr; // 32 bits
-		uint32_t destAddr; // 32 bits
-	};
+		// ipv4 header format
+		struct IPv4header
+		{
+			uint8_t version; // 4 bits 
+			uint8_t headerLength; // 4 bits
+			uint8_t dscp; // 6 bits
+			uint8_t ecn; // 2 bits
+			uint16_t totalLength; // 16 bits
+			uint16_t identification; // 16 bits
+			uint8_t flags; // 3 bits
+			uint16_t fragmentOffset; // 13 bits
+			uint8_t timeToLive; // 8 bits
+			uint8_t protocol; // 8 bits
+			uint16_t headerChecksum; // 16 bits
+			uint32_t srcAddr; // 32 bits
+			uint32_t destAddr; // 32 bits
+		};
 
 
-	// parse ip packet into header
-	IPheader parseIPheader(const uint8_t* packet)
-	{
-		IPheader ipHeader;
+		// parse ipv4 packet into header
+		IPv4header parseIPv4header(const uint8_t* packet)
+		{
+			IPv4header ipv4Header;
 
-		size_t offset = 0;
+			size_t offset = 0;
 
-		uint8_t v_ihl = bite::read8(packet , offset);
-		ipHeader.version = v_ihl >> 4;
-		ipHeader.headerLength = v_ihl & 0b0000'1111;
+			uint8_t v_ihl = bite::read8(packet , offset);
+			ipv4Header.version = v_ihl >> 4;
+			ipv4Header.headerLength = v_ihl & 0b0000'1111;
 
-		uint8_t typeOfService = bite::read8(packet , offset);
-		ipHeader.dscp = typeOfService >> 2;
-		ipHeader.ecn = typeOfService & 0b0000'0011;
+			uint8_t typeOfService = bite::read8(packet , offset);
+			ipv4Header.dscp = typeOfService >> 2;
+			ipv4Header.ecn = typeOfService & 0b0000'0011;
 
-		ipHeader.totalLength = bite::read16(packet , offset);
-		ipHeader.identification = bite::read16(packet , offset);
+			ipv4Header.totalLength = bite::read16(packet , offset);
+			ipv4Header.identification = bite::read16(packet , offset);
 
-		uint16_t flagsFragOffset = bite::read16(packet , offset);
-		ipHeader.flags = flagsFragOffset >> 13;
-		ipHeader.fragmentOffset = flagsFragOffset & 0b0001'1111'1111'1111;
+			uint16_t flagsFragOffset = bite::read16(packet , offset);
+			ipv4Header.flags = flagsFragOffset >> 13;
+			ipv4Header.fragmentOffset = flagsFragOffset & 0b0001'1111'1111'1111;
 
-		ipHeader.timeToLive = bite::read8(packet , offset);
-		ipHeader.protocol = bite::read8(packet , offset);
-		ipHeader.headerChecksum = bite::read16(packet , offset);
-		ipHeader.srcAddr = bite::read32(packet , offset);
-		ipHeader.destAddr = bite::read32(packet , offset);
+			ipv4Header.timeToLive = bite::read8(packet , offset);
+			ipv4Header.protocol = bite::read8(packet , offset);
+			ipv4Header.headerChecksum = bite::read16(packet , offset);
+			ipv4Header.srcAddr = bite::read32(packet , offset);
+			ipv4Header.destAddr = bite::read32(packet , offset);
 
 
-		return ipHeader;
+			return ipv4Header;
+		}
+
+
+		// prints ipv4 header information
+		void printIPv4header(const IPv4header& ipv4Header)
+		{
+			std::cout << "=== IPv4 Packet ===" << std::endl;
+			std::cout << "Version: " << +ipv4Header.version << std::endl;
+			std::cout << "Header Length: " << +ipv4Header.headerLength << std::endl;
+			std::cout << "Differentiated Services Code Point: " << +ipv4Header.dscp << std::endl;
+			std::cout << "Explicit congestion Notification: " << +ipv4Header.ecn << std::endl;
+			std::cout << "Total Length: " << ipv4Header.totalLength << std::endl;
+			std::cout << "Identification: " << ipv4Header.identification << std::endl;
+			std::cout << "Flags: " << +ipv4Header.flags << std::endl;
+			std::cout << "Fragment Offset: " << ipv4Header.fragmentOffset << std::endl;
+			std::cout << "Time To Live: " << +ipv4Header.timeToLive << std::endl;
+			std::cout << "Protocol: " << +ipv4Header.protocol << std::endl;
+			std::cout << "Header Checksum: " << ipv4Header.headerChecksum << std::endl;
+			std::cout << "Source IPv4 Address: " << printIPv4addr(ipv4Header.srcAddr) << std::endl;
+			std::cout << "Destination IPv4 Address: " << printIPv4addr(ipv4Header.destAddr) << std::endl << std::endl;
+
+
+			return;
+		}
 	}
 
 
-	// prints ip header information
-	void printIPheader(const IPheader& ipHeader)
+	namespace IPv6
 	{
-		std::cout << "=== IPv4 Packet ===" << std::endl;
-		std::cout << "Version: " << +ipHeader.version << std::endl;
-		std::cout << "Header Length: " << +ipHeader.headerLength << std::endl;
-		std::cout << "Differentiated Services Code Point: " << +ipHeader.dscp << std::endl;
-		std::cout << "Explicit congestion notification: " << +ipHeader.ecn << std::endl;
-		std::cout << "Total length: " << ipHeader.totalLength << std::endl;
-		std::cout << "Identification: " << ipHeader.identification << std::endl;
-		std::cout << "Flags: " << +ipHeader.flags << std::endl;
-		std::cout << "Fragment offset: " << ipHeader.fragmentOffset << std::endl;
-		std::cout << "Time to live: " << +ipHeader.timeToLive << std::endl;
-		std::cout << "Protocol: " << +ipHeader.protocol << std::endl;
-		std::cout << "Header checksum: " << ipHeader.headerChecksum << std::endl;
-		std::cout << "Source IPv4 address: " << printIPaddr(ipHeader.srcAddr) << std::endl;
-		std::cout << "Destination IPv4 address: " << printIPaddr(ipHeader.destAddr) << std::endl << std::endl;
+		// ipv6 header format
+		struct IPv6header
+		{
+			uint8_t version; // 4 bits
+			uint8_t trafficClass; // 8 bits
+			uint32_t flowLabel; // 20 bits
+			uint16_t payloadLength; // 16 bits
+			uint8_t nextHeader; // 8 bits
+			uint8_t hopLimit; // 8 bits
+			uint8_t srcAddr[16]; // 128 bits
+			uint8_t destAddr[16]; // 128 bits
+		};
+
+
+		// parse ipv6 packet into header
+		IPv6header parseIPv6header(const uint8_t* packet)
+		{
+			IPv6header ipv6Header;
+
+			size_t offset = 0;
+
+			uint32_t vTcFl = bite::read32(packet , offset);
+			ipv6Header.version = vTcFl >> 28;
+			ipv6Header.trafficClass = (vTcFl >> 20) & 0b1111'1111;
+			ipv6Header.flowLabel = vTcFl & 0b1111'1111'1111'1111'1111;
+
+			ipv6Header.payloadLength = bite::read16(packet , offset);
+			ipv6Header.nextHeader = bite::read8(packet , offset);
+			ipv6Header.hopLimit = bite::read8(packet , offset);
+
+			for (int byte = 0; byte < 16; byte++)
+			{
+				ipv6Header.srcAddr[byte] = bite::read8(packet , offset);
+			}
+
+			for (int byte = 0; byte < 16; byte++)
+			{
+				ipv6Header.destAddr[byte] = bite::read8(packet , offset);
+			}
+
+
+			return ipv6Header;
+		}
+
+
+		// prints ipv6 header information
+		void printIPv6header(const IPv6header& ipv6Header)
+		{
+			std::cout << "=== IPv6 Packet ===" << std::endl;
+			std::cout << "Version: " << +ipv6Header.version << std::endl;
+			std::cout << "Traffic Class: " << +ipv6Header.trafficClass << std::endl;
+			std::cout << "Flow Label: " << ipv6Header.flowLabel << std::endl;
+			std::cout << "Payload Length: " << ipv6Header.payloadLength << std::endl;
+			std::cout << "Next Header: " << +ipv6Header.nextHeader << std::endl;
+			std::cout << "Hop Limit: " << +ipv6Header.hopLimit << std::endl;
+			std::cout << "Source Address: " << printIPv6addr(ipv6Header.srcAddr) << std::endl;
+			std::cout << "Destination Address: " << printIPv6addr(ipv6Header.destAddr) << std::endl << std::endl;
+		}
+	}
+}
+
+
+namespace ARP
+{
+	// arp header format
+	struct ARPheader
+	{
+		uint16_t hType; // 16 bits
+		uint16_t pType; // 16 bits
+		uint8_t hLength; // 8 bits
+		uint8_t pLength; // 8 bits
+		uint16_t operation; // 16 bits
+		uint8_t shAddr[6]; // 48 bits
+		uint32_t	spAddr; // 32 bits
+		uint8_t thAddr[6]; // 48 bits
+		uint32_t tpAddr; // 32 bits
+	};
+
+
+	// parse arp packet into header
+	ARPheader parseARPheader(const uint8_t* packet)
+	{
+		ARPheader arpHeader;
+
+		size_t offset = 0;
+
+		arpHeader.hType = bite::read16(packet , offset);
+		arpHeader.pType = bite::read16(packet , offset);
+		arpHeader.hLength = bite::read8(packet , offset);
+		arpHeader.pLength = bite::read8(packet , offset);
+		arpHeader.operation = bite::read16(packet , offset);
+		
+		for (int byte = 0; byte < 6; byte++)
+		{
+			arpHeader.shAddr[byte] = bite::read8(packet , offset);
+		}
+
+		arpHeader.spAddr = bite::read32(packet , offset);
+
+		for (int byte = 0; byte < 6; byte++)
+		{
+			arpHeader.thAddr[byte] = bite::read8(packet , offset);
+		}
+
+		arpHeader.tpAddr = bite::read32(packet , offset);
+
+
+		return arpHeader;
+	}
+
+
+	// prints arp header information
+	void printARPheader(const ARPheader& arpHeader)
+	{
+		std::cout << "=== ARP Packet ===" << std::endl;
+		std::cout << "Hardware Type: " << arpHeader.hType << std::endl;
+		std::cout << "Protocol Type: " << arpHeader.pType << std::endl;
+		std::cout << "Hardware Length: " << +arpHeader.hLength << std::endl;
+		std::cout << "Protocol Length: " << +arpHeader.pLength << std::endl;
+		std::cout << "Operation: " << arpHeader.operation << std::endl;
+		std::cout << "Sender Hardware Address: " << printMACaddr(arpHeader.shAddr) << std::endl;
+		std::cout << "Sender Protcol Address: " << printIPv4addr(arpHeader.spAddr) << std::endl;
+		std::cout << "Target Hardware Address: " << printMACaddr(arpHeader.thAddr) << std::endl;
+		std::cout << "Target Protocol Address: " << printIPv4addr(arpHeader.tpAddr) << std::endl << std::endl;
+
+
+		return;
+	}
+}
+
+
+namespace ICMP
+{
+	// icmp header format
+	struct ICMPheader
+	{
+		uint8_t type; // 8 bits
+		uint8_t code; // 8 bits
+		uint16_t checksum; // 16 bits
+	};
+
+
+	// parse icmp packet into header
+	ICMPheader parseICMPheader(const uint8_t* packet)
+	{
+		ICMPheader icmpHeader;
+
+		size_t offset = 0;
+
+		icmpHeader.type = bite::read8(packet , offset);
+		icmpHeader.code = bite::read8(packet , offset);
+		icmpHeader.checksum = bite::read16(packet , offset);
+
+
+		return icmpHeader;
+	}
+
+
+	// prints icmp header information
+	void printICMPheader(const ICMPheader& icmpHeader)
+	{
+		std::cout << "=== ICMP Packet ===" << std::endl;
+		std::cout << "Type: " << +icmpHeader.type << std::endl;
+		std::cout << "Code: " << +icmpHeader.code << std::endl;
+		std::cout << "Checksum: " << icmpHeader.checksum << std::endl << std::endl;
 
 
 		return;
@@ -190,7 +385,8 @@ namespace TCP
 		uint16_t destPort; // 16 bits
 		uint32_t seqNum; // 32 bits
 		uint32_t ackNum; // 32 bits
-		uint8_t dataOffset; // 4 bits + 4 0 bits for reserved
+		uint8_t dataOffset; // 4 bits
+		uint8_t reserved = 0; // 4 bits set to 0
 		uint8_t flags; // 8 bits
 		uint16_t window; // 16 bits
 		uint16_t checksum; // 16 bits
@@ -269,6 +465,7 @@ namespace TCP
 		std::cout << "Sequence Number: " << tcpHeader.seqNum << std::endl;
 		std::cout << "Acknowledgement Number: " << tcpHeader.ackNum << std::endl;
 		std::cout << "Data Offset: " << +tcpHeader.dataOffset << std::endl;
+		std::cout << "Reserved: " << +tcpHeader.reserved << std::endl;
 		parseTCPflags(tcpHeader.flags);
 		std::cout << "Window: " << tcpHeader.window << std::endl;
 		std::cout << "Checksum: " << tcpHeader.checksum << std::endl;
@@ -290,7 +487,7 @@ namespace UDP
 		uint16_t length; // 16 bits
 		uint16_t checksum; // 16 bits
 	};
-	
+
 
 	// parse udp packet into header
 	UDPheader parseUDPheader(const uint8_t* packet)
@@ -298,7 +495,7 @@ namespace UDP
 		UDPheader udpHeader;
 
 		size_t offset = 0;
-		
+
 		udpHeader.srcPort = bite::read16(packet , offset);
 		udpHeader.destPort = bite::read16(packet , offset);
 		udpHeader.length = bite::read16(packet , offset);
@@ -314,7 +511,7 @@ namespace UDP
 	{
 		std::cout << "=== UDP Packet ===" << std::endl;
 		std::cout << "Source Port: " << udpHeader.srcPort << std::endl;
-		std::cout << "Destination port: " << udpHeader.destPort << std::endl;
+		std::cout << "Destination Port: " << udpHeader.destPort << std::endl;
 		std::cout << "Length: " << udpHeader.length << std::endl;
 		std::cout << "Checksum: " << udpHeader.checksum << std::endl << std::endl;
 
@@ -324,61 +521,24 @@ namespace UDP
 }
 
 
-namespace ICMP
-{
-	// icmp header format
-	struct ICMPheader
-	{
-		uint8_t type; // 8 bits
-		uint8_t code; // 8 bits
-		uint16_t checksum; // 16 bits
-	};
-
-
-	// parse icmp packet into header
-	ICMPheader parseICMPheader(const uint8_t* packet)
-	{
-		ICMPheader icmpHeader;
-
-		size_t offset = 0;
-
-		icmpHeader.type = bite::read8(packet , offset);
-		icmpHeader.code = bite::read8(packet , offset);
-		icmpHeader.checksum = bite::read16(packet , offset);
-
-
-		return icmpHeader;
-	}
-
-
-	// prints icmp header information
-	void printICMPheader(const ICMPheader& icmpHeader)
-	{
-		std::cout << "=== ICMP Packet ===" << std::endl;
-		std::cout << "Type: " << +icmpHeader.type << std::endl;
-		std::cout << "Code: " << +icmpHeader.code << std::endl;
-		std::cout << "Checksum: " << icmpHeader.checksum << std::endl << std::endl;
-
-
-		return;
-	}
-}
-
-
 int main()
 {
-	// test packets
-	uint8_t ethPacket[] = {0xbc , 0xfc , 0xe7 , 0x09 , 0xa4 , 0x99 , 0xc8 , 0x96 , 0x5a , 0xdd , 0xbe , 0x60 , 0x86 , 0xdd};
-	uint8_t ipPacket[] = {0x60 , 0x05 , 0x39 , 0x9c , 0x00 , 0x20 , 0x06 , 0x75 , 0x26 , 0x03 , 0x10 , 0x63 , 0x00 , 0x1c , 0x01 , 0x48 , 0x00 , 0x00 , 0x00 , 0x00 , 0x03 , 0x65 , 0x7e , 0xa3 , 0x2a , 0x06 , 0x59 , 0x02 , 0x49 , 0xc1 , 0x3f , 0x00 , 0x18 , 0x05 , 0xf2 , 0x84 , 0x3d , 0x83 , 0x3c , 0xf6};
-	uint8_t tcpPacket[] = {0x01 , 0xbb , 0x34 , 0x89 , 0x21 , 0x8d , 0xb2 , 0xa3 , 0x65 , 0xa2 , 0x38 , 0x39 , 0x80 , 0x12 , 0xff , 0xff , 0x7c , 0x24 , 0x00 , 0x00 , 0x02 , 0x04 , 0x05 , 0xa0 , 0x01 , 0x03 , 0x03 , 0x08 , 0x01 , 0x01 , 0x04 , 0x02};
-	uint8_t udpPacket[] = {0x01 , 0xbb , 0xf6 , 0x3b , 0x00 , 0x25 , 0xb0 , 0x31};
-	uint8_t icmpPacket[] = {0x08 , 0x00 , 0x4d , 0x37 , 0x00 , 0x01 , 0x00 , 0x24};
+	// static test packets go here!
+	uint8_t ethPacket[] = {};
+	uint8_t ipv4Packet[] = {};
+	uint8_t ipv6Packet[] = {};
+	uint8_t arpPacket[] = {};
+	uint8_t tcpPacket[] = {};
+	uint8_t udpPacket[] = {};
+	uint8_t icmpPacket[] = {};
 
 	Ethernet::printEthHeader(Ethernet::parseEthHeader(ethPacket));
-	IP::printIPheader(IP::parseIPheader(ipPacket));
+	IP::IPv4::printIPv4header(IP::IPv4::parseIPv4header(ipv4Packet));
+	IP::IPv6::printIPv6header(IP::IPv6::parseIPv6header(ipv6Packet));
+	ARP::printARPheader(ARP::parseARPheader(arpPacket));
+	ICMP::printICMPheader(ICMP::parseICMPheader(icmpPacket));
 	TCP::printTCPheader(TCP::parseTCPheader(tcpPacket));
 	UDP::printUDPheader(UDP::parseUDPheader(udpPacket));
-	ICMP::printICMPheader(ICMP::parseICMPheader(icmpPacket));
 
 
 	return 0;
