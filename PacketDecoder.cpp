@@ -280,16 +280,105 @@ namespace TCP
 }
 
 
+namespace UDP
+{
+	// udp header format
+	struct UDPheader
+	{
+		uint16_t srcPort; // 16 bits
+		uint16_t destPort; // 16 bits
+		uint16_t length; // 16 bits
+		uint16_t checksum; // 16 bits
+	};
+	
+
+	// parse udp packet into header
+	UDPheader parseUDPheader(const uint8_t* packet)
+	{
+		UDPheader udpHeader;
+
+		size_t offset = 0;
+		
+		udpHeader.srcPort = bite::read16(packet , offset);
+		udpHeader.destPort = bite::read16(packet , offset);
+		udpHeader.length = bite::read16(packet , offset);
+		udpHeader.checksum = bite::read16(packet , offset);
+
+
+		return udpHeader;
+	}
+
+
+	// prints udp header information
+	void printUDPheader(const UDPheader& udpHeader)
+	{
+		std::cout << "=== UDP Packet ===" << std::endl;
+		std::cout << "Source Port: " << udpHeader.srcPort << std::endl;
+		std::cout << "Destination port: " << udpHeader.destPort << std::endl;
+		std::cout << "Length: " << udpHeader.length << std::endl;
+		std::cout << "Checksum: " << udpHeader.checksum << std::endl << std::endl;
+
+
+		return;
+	}
+}
+
+
+namespace ICMP
+{
+	// icmp header format
+	struct ICMPheader
+	{
+		uint8_t type; // 8 bits
+		uint8_t code; // 8 bits
+		uint16_t checksum; // 16 bits
+	};
+
+
+	// parse icmp packet into header
+	ICMPheader parseICMPheader(const uint8_t* packet)
+	{
+		ICMPheader icmpHeader;
+
+		size_t offset = 0;
+
+		icmpHeader.type = bite::read8(packet , offset);
+		icmpHeader.code = bite::read8(packet , offset);
+		icmpHeader.checksum = bite::read16(packet , offset);
+
+
+		return icmpHeader;
+	}
+
+
+	// prints icmp header information
+	void printICMPheader(const ICMPheader& icmpHeader)
+	{
+		std::cout << "=== ICMP Packet ===" << std::endl;
+		std::cout << "Type: " << +icmpHeader.type << std::endl;
+		std::cout << "Code: " << +icmpHeader.code << std::endl;
+		std::cout << "Checksum: " << icmpHeader.checksum << std::endl << std::endl;
+
+
+		return;
+	}
+}
+
+
 int main()
 {
 	// test packets
 	uint8_t ethPacket[] = {0xbc , 0xfc , 0xe7 , 0x09 , 0xa4 , 0x99 , 0xc8 , 0x96 , 0x5a , 0xdd , 0xbe , 0x60 , 0x86 , 0xdd};
-	uint8_t ipPacket[] = {0x60 , 0x05 , 0x39 , 0x9c , 0x00 , 0x20 , 0x06 , 0x75 , 0x26 , 0x03 , 0x10 , 0x63 , 0x00 , 0x1c , 0x01 , 0x48 , 0x00 , 0x00 , 0x00 , 0x00 , 0x03 , 0x65 , 0x7e , 0xa3 , 0x2a , 0x06 , 0x59 , 0x02 , 0x49 , 0xc1 , 0x3f , 0x00 , 0x18 , 0x05 , 0xf2 , 0x84 , 0x3d , 0x83 , 0x3c , 0xf6 , };
+	uint8_t ipPacket[] = {0x60 , 0x05 , 0x39 , 0x9c , 0x00 , 0x20 , 0x06 , 0x75 , 0x26 , 0x03 , 0x10 , 0x63 , 0x00 , 0x1c , 0x01 , 0x48 , 0x00 , 0x00 , 0x00 , 0x00 , 0x03 , 0x65 , 0x7e , 0xa3 , 0x2a , 0x06 , 0x59 , 0x02 , 0x49 , 0xc1 , 0x3f , 0x00 , 0x18 , 0x05 , 0xf2 , 0x84 , 0x3d , 0x83 , 0x3c , 0xf6};
 	uint8_t tcpPacket[] = {0x01 , 0xbb , 0x34 , 0x89 , 0x21 , 0x8d , 0xb2 , 0xa3 , 0x65 , 0xa2 , 0x38 , 0x39 , 0x80 , 0x12 , 0xff , 0xff , 0x7c , 0x24 , 0x00 , 0x00 , 0x02 , 0x04 , 0x05 , 0xa0 , 0x01 , 0x03 , 0x03 , 0x08 , 0x01 , 0x01 , 0x04 , 0x02};
+	uint8_t udpPacket[] = {0x01 , 0xbb , 0xf6 , 0x3b , 0x00 , 0x25 , 0xb0 , 0x31};
+	uint8_t icmpPacket[] = {0x08 , 0x00 , 0x4d , 0x37 , 0x00 , 0x01 , 0x00 , 0x24};
 
 	Ethernet::printEthHeader(Ethernet::parseEthHeader(ethPacket));
 	IP::printIPheader(IP::parseIPheader(ipPacket));
 	TCP::printTCPheader(TCP::parseTCPheader(tcpPacket));
+	UDP::printUDPheader(UDP::parseUDPheader(udpPacket));
+	ICMP::printICMPheader(ICMP::parseICMPheader(icmpPacket));
 
 
 	return 0;
