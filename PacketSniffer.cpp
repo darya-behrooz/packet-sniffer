@@ -334,7 +334,7 @@ namespace PacketDecoder
 
 				uint8_t v_ihl = bite::read8(packet , offset);
 				ipv4Header.version = v_ihl >> 4;
-				ipv4Header.headerLength = v_ihl & 0b0000'1111;
+				ipv4Header.headerLength = (v_ihl & 0b0000'1111) * 4;
 
 				uint8_t typeOfService = bite::read8(packet , offset);
 				ipv4Header.dscp = typeOfService >> 2;
@@ -717,19 +717,19 @@ namespace PacketDemuxer
 				{
 					case 1:
 					{
-						PacketDecoder::ICMP::printICMPheader(PacketDecoder::ICMP::parseICMPheader(packet + (ip.headerLength * 4)));
+						PacketDecoder::ICMP::printICMPheader(PacketDecoder::ICMP::parseICMPheader(packet + (ip.headerLength)));
 						break;
 					}
 
 					case 6:
 					{
-						PacketDecoder::TCP::printTCPheader(PacketDecoder::TCP::parseTCPheader(packet + (ip.headerLength * 4)));
+						PacketDecoder::TCP::printTCPheader(PacketDecoder::TCP::parseTCPheader(packet + (ip.headerLength)));
 						break;
 					}
 
 					case 17:
 					{
-						PacketDecoder::UDP::printUDPheader(PacketDecoder::UDP::parseUDPheader(packet + (ip.headerLength * 4)));
+						PacketDecoder::UDP::printUDPheader(PacketDecoder::UDP::parseUDPheader(packet + (ip.headerLength)));
 						break;
 					}
 
@@ -751,19 +751,19 @@ namespace PacketDemuxer
 				{
 					case 1: case 58:
 					{
-						PacketDecoder::ICMP::printICMPheader(PacketDecoder::ICMP::parseICMPheader(packet + (40 * sizeof(uint8_t))));
+						PacketDecoder::ICMP::printICMPheader(PacketDecoder::ICMP::parseICMPheader(packet + 40));
 						break;
 					}
 
 					case 6:
 					{
-						PacketDecoder::TCP::printTCPheader(PacketDecoder::TCP::parseTCPheader(packet + (40 * sizeof(uint8_t))));
+						PacketDecoder::TCP::printTCPheader(PacketDecoder::TCP::parseTCPheader(packet + 40));
 						break;
 					}
 
 					case 17:
 					{
-						PacketDecoder::UDP::printUDPheader(PacketDecoder::UDP::parseUDPheader(packet + (40 * sizeof(uint8_t))));
+						PacketDecoder::UDP::printUDPheader(PacketDecoder::UDP::parseUDPheader(packet + 40));
 						break;
 					}
 
@@ -797,6 +797,11 @@ namespace PacketSniffer
 		while (true)
 		{
 			int packet = recv(sock , reinterpret_cast<char*>(buffer) , sizeof(buffer) , NULL);
+
+			if (packet == SOCKET_ERROR)
+			{
+				errHandle(WSAGetLastError() , "recv(sock , reinterpret_cast<char*>(buffer) , sizeof(buffer) , NULL)");
+			}
 
 			if (packet > 0)
 			{
