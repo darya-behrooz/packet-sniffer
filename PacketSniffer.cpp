@@ -1,14 +1,20 @@
+#define NOMINMAX
+
+#pragma comment(lib , "Packet.lib")
+#pragma comment(lib , "wpcap.lib")
 #pragma comment(lib , "Ws2_32.lib")
 
+#include <clearscreen.h>
 #include <cstdint>
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
+#include <limits>
+#include <pcap.h>
 #include <sstream>
 #include <string>
 #include <WinSock2.h>
 #include <WS2tcpip.h>
-#include <mstcpip.h>
 
 
 // error handling
@@ -26,6 +32,15 @@ static_assert(sizeof(uint32_t) == 4 , "sizeof(uint32_t) != 4\nyour compiler sure
 
 
 	LocalFree(errMsg);
+
+	exit(errNo);
+}
+
+[[noreturn]] void errHandle(int errNo , const char* errMsg , const char* errLocation)
+{
+	std::wcerr << "=== ERROR --- {" << errLocation << "} FAILED --- " << errNo << ": " << errMsg << "===" << std::endl;
+	std::cerr << "=== PROGRAM TERMINATED {" << errNo << "} ===" << std::endl;
+
 
 	exit(errNo);
 }
@@ -113,114 +128,111 @@ std::string printMACaddr(const uint8_t mac[6])
 
 
 
-// winsock startup
-struct wsa
-{
-	public:
-		// constructor
-		wsa()
-		{
-			WSADATA wsaData;
-			int wsaErr = WSAStartup(MAKEWORD(2 , 2) , &wsaData);
-			if (wsaErr)
-			{
-				errHandle(wsaErr , "WSAStartup(MAKEWORD(2 , 2) , &wsaData)");
-			}
-			#ifdef _DEBUG
-				std::cout << wsaData.szDescription << " status: " << wsaData.szSystemStatus << std::endl;
-			#endif
-		}
-
-
-		// rule of five
-		wsa(const wsa&) = delete; // delete copy constructor
-		wsa(wsa&&) = delete; // delete move constructor
-		wsa& operator=(const wsa&) = delete; // delete copy assignment operator
-		wsa& operator=(const wsa&&) = delete; // delete move assignment operator
-
-
-		// destructor
-		~wsa() noexcept
-		{
-			if (WSACleanup() == SOCKET_ERROR)
-			{
-				errHandle(WSAGetLastError() , "WSACleanup()");
-			}
-		}
-};
-
-static wsa wsaStartup;
-
-
-// sock startup
-class sock
+// npcap setup
+class npcap
 {
 	public:
 		// attributes
-		SOCKET sockfd; // socket file descriptor
-		sockaddr_in sockAddr // socket address
-		{
-			.sin_family = AF_INET ,
-			.sin_addr = strIPv4("192.168.0.159")
-		};
+		char errMsg[PCAP_ERRBUF_SIZE];
+		pcap_if_t* nic; // selected network adapter
+		pcap_if_t* nicList; // list of all netwrok adapters
+		int nicCount = 0; // number of network adapters
+		pcap_t* handle; // handle to network adapter
 
 
 		// constructor
-		sock() // default
+		npcap() // loads network adapters
 		{
-			sockfd = socket(AF_INET , SOCK_RAW , IPPROTO_IP);
-			if (sockfd == INVALID_SOCKET)
+			if (pcap_findalldevs(&nicList , errMsg) == PCAP_ERROR)
 			{
-				errHandle(WSAGetLastError() , "socket(AF_INET , SOCK_RAW , IPPROTO_IP)");
+				errHandle(PCAP_ERROR , errMsg , "pcap_findalldevs(&nicList , errMsg)");
 			}
-			#ifdef _DEBUG
-				std::cout << "Server socket created" << std::endl;
-			#endif
 		}
 
 
-		// rule of five
-		sock(const sock&) = delete; // delete copy constructor
-		sock(sock&&) = delete; // delete move constructor
-		sock& operator=(const sock&) = delete; // delete copy assignment operator
-		sock& operator=(const sock&&) = delete; // delete move assignment operator
+		// rule of 5
+		npcap(const npcap&) = delete; // delete copy constructor
+		npcap(npcap&&) = delete; // delete move constructor
+		npcap& operator=(const npcap&) = delete; // delete copy assignment operator
+		npcap& operator=(npcap&&) = delete; // delete move assignment operator
 
 
 		// destructor
-		~sock() noexcept
+		~npcap() noexcept
 		{
-			if (closesocket(sockfd) == SOCKET_ERROR)
+			if (handle)
 			{
-				errHandle(WSAGetLastError() , "closesocket(sockfd)");
+				pcap_close(handle);
+			}
+			if (nicList)
+			{
+				pcap_freealldevs(nicList);
 			}
 		}
 
 
 		// methods
-		void sockBind() const // bind
+		void listNics() // list network adapters
 		{
-			if (bind(sockfd , reinterpret_cast<const sockaddr*>(&sockAddr) , sizeof(sockAddr)) == SOCKET_ERROR)
+			nicCount = 0;
+
+			for (pcap_if_t* nic = nicList; nic != nullptr; nic = nic->next)
 			{
-				errHandle(WSAGetLastError() , "bind(sockfd , reinterpret_cast<const sockaddr*>(&sockAddr) , sizeof(sockAddr))");
+				std::cout << "[" << nicCount++ << "] " << (nic->description ? nic->description : nic->name) << std::endl;
 			}
-			#ifdef _DEBUG
-				std::cout << "Socket bound to " << sockAddr.sin_addr << ":" << ntohs(sockAddr.sin_port) << std::endl;
-			#endif
 
 
 			return;
 		}
 
-		void promiscuous() const // enable promiscuous mode
+		void selectNic() // user selects network adapter
 		{
-			u_long rcvallValue = 1;
-			if (ioctlsocket(sockfd , SIO_RCVALL , &rcvallValue) == SOCKET_ERROR)
+			std::cout << "Choose a network adapter:" << std::endl;
+			listNics();
+
+			int nicChoice;
+			while (true)
 			{
-				errHandle(WSAGetLastError() , "ioctlsocket(sockfd , SIO_RCVALL , &rvallValue)");
+				std::cout << ">";
+				std::cin >> nicChoice;
+				if (std::cin.fail() || nicChoice < 0 || nicChoice >= nicCount)
+				{
+					std::cin.clear();
+					std::cin.ignore(std::numeric_limits<std::streamsize>::max() , '\n');
+					continue;
+				}
+				break;
 			}
-			#ifdef _DEBUG
-				std::cout << "Promiscuous mode turned on" << std::endl;
-			#endif
+
+			nic = nicList;
+			for (int i = 0; i < nicChoice && nic; i++)
+			{
+				nic = nic->next;
+			}
+
+
+			return;
+		}
+
+		void nicListen()
+		{
+			if (!nic)
+			{
+				errHandle(PCAP_ERROR_NOT_ACTIVATED , "No NIC selected" , "nicListen()");
+			}
+
+			handle = pcap_open_live(nic->name , 262144 , true , 1000 , errMsg);
+			if (handle == NULL)
+			{
+				errHandle(PCAP_ERROR , errMsg , "pcap_open_live(nic->name , 262144 , true , 1000 , errMsg)");
+			}
+			if (errMsg[0] != '\0')
+			{
+				std::cout << "Warning: " << errMsg << std::endl;
+			}
+
+			ClearScreen();
+			std::cout << "Listening on " << nic->description << std::endl << std::endl;
 
 
 			return;
@@ -253,7 +265,7 @@ namespace PacketDecoder
 		}
 	}
 
-	namespace Ethernet //! not yet implemented
+	namespace Ethernet
 	{
 		// ethernet header format
 		struct EthernetHeader
@@ -446,7 +458,7 @@ namespace PacketDecoder
 	}
 
 
-	namespace ARP //! not yet implemented
+	namespace ARP
 	{
 		// arp header format
 		struct ARPheader
@@ -457,7 +469,7 @@ namespace PacketDecoder
 			uint8_t pLength; // 8 bits
 			uint16_t operation; // 16 bits
 			uint8_t shAddr[6]; // 48 bits
-			uint32_t	spAddr; // 32 bits
+			uint32_t spAddr; // 32 bits
 			uint8_t thAddr[6]; // 48 bits
 			uint32_t tpAddr; // 32 bits
 		};
@@ -705,31 +717,49 @@ namespace PacketDecoder
 
 namespace PacketDemuxer
 {
-	void demux(const uint8_t* packet)
+	void demux(const pcap_pkthdr* metadata, const u_char* packet)
 	{
-		switch (packet[0] >> 4)
+		if (metadata->caplen < 14)
 		{
-			case 4:
+			std::cout << "Incomplete Ethernet packet received" << std::endl;
+
+
+			return;
+		}
+
+		PacketDecoder::Ethernet::EthernetHeader eth = PacketDecoder::Ethernet::parseEthHeader(packet);
+
+		switch (eth.etherType)
+		{
+			case 0x0800:
 			{
-				PacketDecoder::IP::IPv4::IPv4header ip = PacketDecoder::IP::IPv4::parseIPv4header(packet);
+				if (metadata->caplen < 14 + 20)
+				{
+					std::cout << "Incomplete IPv4 packet received" << std::endl;
+
+
+					return;
+				}
+
+				PacketDecoder::IP::IPv4::IPv4header ip = PacketDecoder::IP::IPv4::parseIPv4header(packet + 14);
 
 				switch (ip.protocol)
 				{
 					case 1:
 					{
-						PacketDecoder::ICMP::printICMPheader(PacketDecoder::ICMP::parseICMPheader(packet + (ip.headerLength)));
+						PacketDecoder::ICMP::printICMPheader(PacketDecoder::ICMP::parseICMPheader(packet + 14 + ip.headerLength));
 						break;
 					}
 
 					case 6:
 					{
-						PacketDecoder::TCP::printTCPheader(PacketDecoder::TCP::parseTCPheader(packet + (ip.headerLength)));
+						PacketDecoder::TCP::printTCPheader(PacketDecoder::TCP::parseTCPheader(packet + 14 + ip.headerLength));
 						break;
 					}
 
 					case 17:
 					{
-						PacketDecoder::UDP::printUDPheader(PacketDecoder::UDP::parseUDPheader(packet + (ip.headerLength)));
+						PacketDecoder::UDP::printUDPheader(PacketDecoder::UDP::parseUDPheader(packet + 14 + ip.headerLength));
 						break;
 					}
 
@@ -743,27 +773,41 @@ namespace PacketDemuxer
 				break;
 			}
 
-			case 6: // needs further implemenation
+			case 0x0806:
 			{
-				PacketDecoder::IP::IPv6::IPv6header ip = PacketDecoder::IP::IPv6::parseIPv6header(packet);
+				PacketDecoder::ARP::printARPheader(PacketDecoder::ARP::parseARPheader(packet + 14));
+				break;
+			}
+
+			case 0x86DD:
+			{
+				if (metadata->caplen < 14 + 40)
+				{
+					std::cout << "Incomplete IPv6 packet received" << std::endl;
+
+
+					return;
+				}
+
+				PacketDecoder::IP::IPv6::IPv6header ip = PacketDecoder::IP::IPv6::parseIPv6header(packet + 14);
 
 				switch (ip.nextHeader)
 				{
 					case 1: case 58:
 					{
-						PacketDecoder::ICMP::printICMPheader(PacketDecoder::ICMP::parseICMPheader(packet + 40));
+						PacketDecoder::ICMP::printICMPheader(PacketDecoder::ICMP::parseICMPheader(packet + 14 + 40));
 						break;
 					}
 
 					case 6:
 					{
-						PacketDecoder::TCP::printTCPheader(PacketDecoder::TCP::parseTCPheader(packet + 40));
+						PacketDecoder::TCP::printTCPheader(PacketDecoder::TCP::parseTCPheader(packet + 14 + 40));
 						break;
 					}
 
 					case 17:
 					{
-						PacketDecoder::UDP::printUDPheader(PacketDecoder::UDP::parseUDPheader(packet + 40));
+						PacketDecoder::UDP::printUDPheader(PacketDecoder::UDP::parseUDPheader(packet + 14 + 40));
 						break;
 					}
 
@@ -779,7 +823,7 @@ namespace PacketDemuxer
 
 			default:
 			{
-				std::cout << "=== PACKET WAS NOT INTERNET PROTOCOL ===" << std::endl;
+				PacketDecoder::Ethernet::printEthHeader(eth);
 				break;
 			}
 		}
@@ -790,22 +834,31 @@ namespace PacketDemuxer
 
 namespace PacketSniffer
 {
-	void sniff(SOCKET sock)
+	void sniff(pcap_t* handle)
 	{
-		uint8_t buffer[65535];
-
 		while (true)
 		{
-			int packet = recv(sock , reinterpret_cast<char*>(buffer) , sizeof(buffer) , NULL);
+			pcap_pkthdr* header;
+			const u_char* body;
 
-			if (packet == SOCKET_ERROR)
+			int packet = pcap_next_ex(handle , &header , &body);
+
+			if (packet == 1) // packet read successfully
 			{
-				errHandle(WSAGetLastError() , "recv(sock , reinterpret_cast<char*>(buffer) , sizeof(buffer) , NULL)");
+				PacketDemuxer::demux(header , body);
 			}
-
-			if (packet > 0)
+			else if (packet == 0) // packet buffer timeout expired
 			{
-				PacketDemuxer::demux(buffer);
+				continue;
+			}
+			else if (packet == PCAP_ERROR_BREAK)
+			{
+				std::cout << "End of transmission" << std::endl;
+				break;
+			}
+			else
+			{
+				errHandle(packet , pcap_geterr(handle) , "pcap_next_ex(handle , &header , &body)");
 			}
 		}
 	}
@@ -816,11 +869,12 @@ namespace PacketSniffer
 int main()
 {
 	std::cout << "=== Packet Sniffer ===" << std::endl << std::endl;
-	sock sock;
-	sock.sockBind();
-	sock.promiscuous();
 
-	PacketSniffer::sniff(sock.sockfd);
+	npcap npcap;
+	npcap.selectNic();
+	npcap.nicListen();
+
+	PacketSniffer::sniff(npcap.handle);
 
 
 	return 0;
